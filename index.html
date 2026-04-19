@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>School Slap</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #000;
+      color: white;
+    }
+
+    header {
+      padding: 15px;
+      background: #111;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .container {
+      padding: 10px;
+    }
+
+    textarea, input {
+      width: 95%;
+      margin: 5px 0;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+    }
+
+    button {
+      padding: 8px 12px;
+      background: #00ff88;
+      border: none;
+      border-radius: 6px;
+      margin-top: 5px;
+      cursor: pointer;
+    }
+
+    .post {
+      background: #111;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 12px;
+    }
+
+    img {
+      width: 100%;
+      margin-top: 10px;
+      border-radius: 10px;
+    }
+
+    .comment {
+      background: #222;
+      margin-top: 5px;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .small {
+      font-size: 12px;
+      color: gray;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>📱 School Slap</header>
+
+<div class="container">
+
+  <textarea id="postText" placeholder="What's happening at school?"></textarea>
+
+  <input type="file" id="imageInput" accept="image/*">
+
+  <button onclick="addPost()">Post</button>
+
+  <div id="feed"></div>
+
+</div>
+
+<script>
+let posts = JSON.parse(localStorage.getItem("posts")) || [];
+
+// SAVE
+function savePosts() {
+  localStorage.setItem("posts", JSON.stringify(posts));
+}
+
+// CREATE POST
+function addPost() {
+  let text = document.getElementById("postText").value;
+  let imageFile = document.getElementById("imageInput").files[0];
+
+  if (text === "" && !imageFile) return;
+
+  let newPost = {
+    text: text,
+    image: "",
+    comments: [],
+    likes: 0
+  };
+
+  if (imageFile) {
+    let reader = new FileReader();
+
+    reader.onload = function(e) {
+      newPost.image = e.target.result;
+      posts.unshift(newPost);
+      savePosts();
+      render();
+    };
+
+    reader.readAsDataURL(imageFile);
+  } else {
+    posts.unshift(newPost);
+    savePosts();
+    render();
+  }
+
+  document.getElementById("postText").value = "";
+  document.getElementById("imageInput").value = "";
+}
+
+// LIKE
+function likePost(index) {
+  posts[index].likes++;
+  savePosts();
+  render();
+}
+
+// ADD COMMENT
+function addComment(index) {
+  let input = document.getElementById("c" + index);
+  if (input.value === "") return;
+
+  posts[index].comments.push(input.value);
+  savePosts();
+  render();
+}
+
+// RENDER FEED
+function render() {
+  let feed = document.getElementById("feed");
+  feed.innerHTML = "";
+
+  posts.forEach((p, i) => {
+    let div = document.createElement("div");
+    div.className = "post";
+
+    div.innerHTML = `
+      <div class="small">You • now</div>
+
+      <p>${p.text}</p>
+
+      ${p.image ? `<img src="${p.image}">` : ""}
+
+      <button onclick="likePost(${i})">❤️ Like (${p.likes})</button>
+
+      <br><br>
+
+      <input id="c${i}" placeholder="Write a reply...">
+      <button onclick="addComment(${i})">Reply</button>
+
+      <div>
+        ${p.comments.map(c => `<div class="comment">👤 ${c}</div>`).join("")}
+      </div>
+    `;
+
+    feed.appendChild(div);
+  });
+}
+
+// LOAD ON START
+render();
+</script>
+
+</body>
+</html>
