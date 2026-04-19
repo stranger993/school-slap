@@ -2,7 +2,6 @@
 <html>
 <head>
   <title>School Slap</title>
-
   <style>
     body {
       margin: 0;
@@ -15,13 +14,11 @@
       padding: 15px;
       background: #111;
       font-size: 20px;
-      font-weight: bold;
       text-align: center;
+      font-weight: bold;
     }
 
-    .container {
-      padding: 10px;
-    }
+    .container { padding: 10px; }
 
     textarea, input {
       width: 95%;
@@ -29,7 +26,6 @@
       padding: 10px;
       border-radius: 8px;
       border: none;
-      outline: none;
     }
 
     button {
@@ -37,7 +33,6 @@
       background: #00ff88;
       border: none;
       border-radius: 6px;
-      margin-top: 5px;
       cursor: pointer;
     }
 
@@ -71,114 +66,145 @@
 
 <body>
 
-<header>📱 School Slap</header>
+<header>📱 School Slap (Live)</header>
 
 <div class="container">
 
-  <textarea id="postText" placeholder="What's happening at school?"></textarea>
-
-  <input type="file" id="imageInput" accept="image/*">
-
-  <button onclick="addPost()">Post</button>
+  <textarea id="text" placeholder="What's happening?"></textarea>
+  <input type="file" id="img" accept="image/*">
+  <button onclick="post()">Post</button>
 
   <div id="feed"></div>
 
 </div>
 
-<script>
-let posts = JSON.parse(localStorage.getItem("posts")) || [];
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  onSnapshot,
+  updateDoc,
+  doc,
+  arrayUnion,
+  increment,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// SAVE
-function savePosts() {
-  localStorage.setItem("posts", JSON.stringify(posts));
-}
+// 🔴 PUT YOUR CONFIG HERE
+const firebaseConfig = {
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_BUCKET",
+  messagingSenderId: "YOUR_ID",
+  appId: "YOUR_APP_ID"
+};
 
-// CREATE POST
-function addPost() {
-  let text = document.getElementById("postText").value;
-  let imageFile = document.getElementById("imageInput").files[0];
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  if (text === "" && !imageFile) return;
+// username
+let username = localStorage.getItem("user") || prompt("Enter your name:");
+localStorage.setItem("user", username);
 
-  let newPost = {
-    text: text,
-    image: "",
-    comments: [],
-    likes: 0
-  };
+// POST
+window.post = async function () {
+  let text = document.getElementById("text").value;
+  let file = document.getElementById("img").files[0];
 
-  if (imageFile) {
+  if (!text && !file) return;
+
+  let image = "";
+
+  if (file) {
     let reader = new FileReader();
+    reader.onload = async function (e) {
+      image = e.target.result;
 
-    reader.onload = function(e) {
-      newPost.image = e.target.result;
-      posts.unshift(newPost);
-      savePosts();
-      render();
+      await addDoc(collection(db, "posts"), {
+        text,
+        image,
+        likes: 0,
+        user: username,
+        comments: [],
+        time: Date.now()
+      });
     };
-
-    reader.readAsDataURL(imageFile);
+    reader.readAsDataURL(file);
   } else {
-    posts.unshift(newPost);
-    savePosts();
-    render();
+    await addDoc(collection(db, "posts"), {
+      text,
+      image: "",
+      likes: 0,
+      user: username,
+      comments: [],
+      time: Date.now()
+    });
   }
 
-  document.getElementById("postText").value = "";
-  document.getElementById("imageInput").value = "";
-}
+  document.getElementById("text").value = "";
+  document.getElementById("img").value = "";
+};
 
-// LIKE
-function likePost(index) {
-  posts[index].likes++;
-  savePosts();
-  render();
-}
+// LIVE FEED
+const q = query(collection(db, "posts"), orderBy("time", "desc"));
 
-// ADD COMMENT
-function addComment(index) {
-  let input = document.getElementById("c" + index);
-  if (input.value === "") return;
-
-  posts[index].comments.push(input.value);
-  savePosts();
-  render();
-}
-
-// RENDER FEED
-function render() {
+onSnapshot(q, (snap) => {
   let feed = document.getElementById("feed");
   feed.innerHTML = "";
 
-  posts.forEach((p, i) => {
+  snap.forEach((d) => {
+    let p = d.data();
+
     let div = document.createElement("div");
     div.className = "post";
 
     div.innerHTML = `
-      <div class="small">You • now</div>
-
+      <div class="small">${p.user}</div>
       <p>${p.text}</p>
-
       ${p.image ? `<img src="${p.image}">` : ""}
 
-      <button onclick="likePost(${i})">❤️ Like (${p.likes})</button>
+      <button onclick="likePost('${d.id}', ${p.likes})">❤️ Like (${p.likes})</button>
 
-      <br><br>
-
-      <input id="c${i}" placeholder="Write a reply...">
-      <button onclick="addComment(${i})">Reply</button>
+      <input id="c${d.id}" placeholder="Reply...">
+      <button onclick="comment('${d.id}')">Reply</button>
 
       <div>
-        ${p.comments.map(c => `<div class="comment">👤 ${c}</div>`).join("")}
+        ${(p.comments || []).map(c =>
+          `<div class="comment"><b>${c.user}:</b> ${c.text}</div>`
+        ).join("")}
       </div>
     `;
 
     feed.appendChild(div);
   });
-}
+});
 
-// LOAD ON START
-render();
+// LIKE
+window.likePost = async function(id, likes) {
+  await updateDoc(doc(db, "posts", id), {
+    likes: likes + 1
+  });
+};
+
+// COMMENT
+window.comment = async function(id) {
+  let input = document.getElementById("c" + id);
+  if (!input.value) return;
+
+  await updateDoc(doc(db, "posts", id), {
+    comments: arrayUnion({
+      user: username,
+      text: input.value
+    })
+  });
+
+  input.value = "";
+};
 </script>
 
 </body>
